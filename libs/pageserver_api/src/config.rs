@@ -375,6 +375,35 @@ pub struct OtelExporterConfig {
     pub timeout: Duration,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OtelResourceAttributes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment_environment: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_attributes: Option<std::collections::HashMap<String, String>>,
+}
+
+impl Default for OtelResourceAttributes {
+    fn default() -> Self {
+        Self {
+            service_name: Some("pageserver".to_string()),
+            service_version: None,
+            deployment_environment: None,
+            node_id: None,
+            node_type: None,
+            custom_attributes: None,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OtelExporterProtocol {
@@ -387,6 +416,8 @@ pub enum OtelExporterProtocol {
 pub struct Tracing {
     pub sampling_ratio: Ratio,
     pub export_config: OtelExporterConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_attributes: Option<OtelResourceAttributes>
 }
 
 impl From<&OtelExporterConfig> for tracing_utils::ExportConfig {
@@ -703,11 +734,6 @@ pub mod defaults {
 
     pub const DEFAULT_EPHEMERAL_BYTES_PER_MEMORY_KB: usize = 0;
 
-    #[cfg(feature = "io-align-4k")]
-    pub const DEFAULT_IO_BUFFER_ALIGNMENT: usize = 4096;
-    #[cfg(all(feature = "io-align-512", not(feature = "io-align-4k")))]
-    pub const DEFAULT_IO_BUFFER_ALIGNMENT: usize = 512;
-    #[cfg(not(any(feature = "io-align-512", feature = "io-align-4k")))]
     pub const DEFAULT_IO_BUFFER_ALIGNMENT: usize = 512;
 
     pub const DEFAULT_SSL_KEY_FILE: &str = "server.key";

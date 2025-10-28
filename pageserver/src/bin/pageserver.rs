@@ -123,10 +123,40 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     let otel_enablement = match &conf.tracing {
-        Some(cfg) => tracing_utils::OtelEnablement::Enabled {
-            service_name: "pageserver".to_string(),
-            export_config: (&cfg.export_config).into(),
-        },
+        Some(cfg) => {
+            let mut resource_attributes = vec![
+                KeyValue::new(resource::SERVICE_NAME, "pageserver"),
+            ];
+
+            if let Some(resource_attributes) = cfg.resource_attributes {
+                if let Some(ref service_version) = resource_attrs.service_version {
+                    resource_attributes.push(KeyValue::new(resource::SERVICE_VERSION, service_version.clone()));
+                }
+                if let Some(ref deployment_env) = resource_attrs.deployment_environment {
+                    resource_attributes.push(KeyValue::new(resource::DEPLOYMENT_ENVIRONMENT, deployment_env.clone()));
+                }
+                if let Some(ref node_id) = resource_attrs.node_id {
+                    resource_attributes.push(KeyValue::new("node.id", node_id.clone()));
+                }
+                if let Some(ref node_type) = resource_attrs.node_type {
+                    resource_attributes.push(KeyValue::new("node.type", node_type.clone()));
+                }
+                if let Some(ref custom_attrs) = resource_attrs.custom_attributes {
+                    for (key, value) in custom_attrs {
+                        resource_attributes.push(KeyValue::new(key.clone(), value.clone()));
+                    }
+                }    
+            }
+
+            tracing_utils::OtelEnablement::Enabled {
+                service_name: "pageserver".to_string(),
+                export_config: (&cfg.export_config).into(),
+                resource_attributes: Some(resource_attributes),
+            },
+        }
+        
+        
+
         None => tracing_utils::OtelEnablement::Disabled,
     };
 
@@ -352,10 +382,6 @@ fn start_pageserver(
         version(),
         launch_ts.to_string(),
         BUILD_TAG,
-    );
-    info!(
-        "IO buffer alignment: {} bytes",
-        pageserver_api::config::defaults::DEFAULT_IO_BUFFER_ALIGNMENT
     );
     set_build_info_metric(GIT_VERSION, BUILD_TAG);
     set_launch_timestamp_metric(launch_ts);

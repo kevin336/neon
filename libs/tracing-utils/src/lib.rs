@@ -67,13 +67,14 @@ pub type Provider = SdkTracerProvider;
 /// If you need some other setting, please test if it works first. And perhaps
 /// add a comment in the list above to save the effort of testing for the next
 /// person.
-pub fn init_tracing(service_name: &str, export_config: ExportConfig) -> Option<Provider> {
+pub fn init_tracing(service_name: &str, export_config: ExportConfig, resource_attributes: Option<Vec<opentelemetry::KeyValue>>) -> Option<Provider> {
     if std::env::var("OTEL_SDK_DISABLED") == Ok("true".to_string()) {
         return None;
     };
     Some(init_tracing_internal(
         service_name.to_string(),
         export_config,
+        resource_attributes,
     ))
 }
 
@@ -84,7 +85,7 @@ where
     tracing_opentelemetry::layer().with_tracer(p.tracer("global"))
 }
 
-fn init_tracing_internal(service_name: String, export_config: ExportConfig) -> Provider {
+fn init_tracing_internal(service_name: String, export_config: ExportConfig, resource_attributes: Option<Vec<opentelemetry::KeyValue>>) -> Provider {
     // Sets up exporter from the provided [`ExportConfig`] parameter.
     // If the endpoint is not specified, it is loaded from the
     // OTEL_EXPORTER_OTLP_ENDPOINT environment variable.
@@ -103,12 +104,17 @@ fn init_tracing_internal(service_name: String, export_config: ExportConfig) -> P
         opentelemetry_sdk::propagation::TraceContextPropagator::new(),
     );
 
+    let mut resource_builder = opentelemetry_sdk::Resource::builder()
+        .with_service_name(service_name);
+
+    if let Some(additional_attrs) = resource_attributes {
+        resource_builder = resource_builder.with_attributes(additional_attrs);
+    }
+
     Provider::builder()
         .with_batch_exporter(exporter)
         .with_resource(
-            opentelemetry_sdk::Resource::builder()
-                .with_service_name(service_name)
-                .build(),
+            resource_builder.build(),
         )
         .build()
 }
@@ -118,6 +124,7 @@ pub enum OtelEnablement {
     Enabled {
         service_name: String,
         export_config: ExportConfig,
+        resource_attributes: Option<Vec<opentelemetry::KeyValue>>,
     },
 }
 
@@ -146,8 +153,9 @@ pub fn init_performance_tracing(otel_enablement: OtelEnablement) -> Option<OtelG
         OtelEnablement::Enabled {
             service_name,
             export_config,
+            resource_attributes,
         } => {
-            let provider = init_tracing(&service_name, export_config)?;
+            let provider = init_tracing(&service_name, export_config, resource_attributes)?;
 
             let otel_layer = layer(&provider).with_filter(LevelFilter::INFO);
             let otel_subscriber = tracing_subscriber::registry().with(otel_layer);
